@@ -2352,6 +2352,7 @@
 		BW_OPP_ENTRY_DDR(1353, 8, 0x80); /*10322 MB/s */
 		BW_OPP_ENTRY_DDR(1555, 8, 0x80); /*11863 MB/s */
 		BW_OPP_ENTRY_DDR(1804, 8, 0x80); /*13763 MB/s */
+		BW_OPP_ENTRY_DDR(2400, 8, 0x80); /* OVERCLOCK */
 	};
 
 	suspendable_ddr4_bw_opp_table: suspendable-ddr4-bw-opp-table {
@@ -2368,6 +2369,7 @@
 		BW_OPP_ENTRY_DDR(1353, 8, 0x80); /*10322 MB/s */
 		BW_OPP_ENTRY_DDR(1555, 8, 0x80); /*11863 MB/s */
 		BW_OPP_ENTRY_DDR(1804, 8, 0x80); /*13763 MB/s */
+		BW_OPP_ENTRY_DDR(2400, 8, 0x80); /* OVERCLOCK */
 	};
 
 	cpu_cpu_ddr_bw: qcom,cpu-cpu-ddr-bw {
@@ -2421,18 +2423,18 @@
 			ddr3-map {
 				qcom,ddr-type = <DDR_TYPE_LPDDR3>;
 				qcom,core-dev-table =
-					<  864000 MHZ_TO_MBPS(200, 8) >,
-					< 1305600 MHZ_TO_MBPS(451, 8) >,
-					< 1804800 MHZ_TO_MBPS(768, 8) >;
+					<  864000 MHZ_TO_MBPS( 547, 8) >,
+					< 1305600 MHZ_TO_MBPS (768, 8) >,
+					< 1804800 MHZ_TO_MBPS( 1017, 8) >;
 			};
 
 			ddr4-map {
 				qcom,ddr-type = <DDR_TYPE_LPDDR4X>;
 				qcom,core-dev-table =
-					<  864000 MHZ_TO_MBPS( 300, 8) >,
-					< 1305600 MHZ_TO_MBPS( 547, 8) >,
-					< 1420000 MHZ_TO_MBPS( 768, 8) >,
-					< 1804800 MHZ_TO_MBPS(1017, 8) >;
+					<  864000 MHZ_TO_MBPS( 547, 8) >,
+					< 1305600 MHZ_TO_MBPS( 768, 8) >,
+					< 1420000 MHZ_TO_MBPS( 1017, 8) >,
+					< 1804800 MHZ_TO_MBPS( 1555, 8) >;
 			};
 		};
 
@@ -2443,18 +2445,18 @@
 			ddr3-map {
 				qcom,ddr-type = <DDR_TYPE_LPDDR3>;
 				qcom,core-dev-table =
-					<  614400 MHZ_TO_MBPS( 200, 8) >,
-					< 1305600 MHZ_TO_MBPS( 451, 8) >,
-					< 1804800 MHZ_TO_MBPS( 768, 8) >;
+					<  614400 MHZ_TO_MBPS( 547, 8) >,
+					< 1305600 MHZ_TO_MBPS( 768, 8) >,
+					< 1804800 MHZ_TO_MBPS( 1017, 8) >;
 			};
 
 			ddr4-map {
 				qcom,ddr-type = <DDR_TYPE_LPDDR4X>;
 				qcom,core-dev-table =
-					<  614400 MHZ_TO_MBPS( 300, 8) >,
-					< 1017600 MHZ_TO_MBPS( 451, 8) >,
-					< 1420000 MHZ_TO_MBPS( 547, 8) >,
-					< 1804800 MHZ_TO_MBPS( 768, 8) >;
+					<  614400 MHZ_TO_MBPS( 547, 8) >,
+					< 1017600 MHZ_TO_MBPS( 768, 8) >,
+					< 1420000 MHZ_TO_MBPS( 1017, 8) >,
+					< 1804800 MHZ_TO_MBPS( 1555, 8) >;
 			};
 		};
 	};
@@ -2490,19 +2492,19 @@
 			ddr3-map {
 				qcom,ddr-type = <DDR_TYPE_LPDDR3>;
 				qcom,core-dev-table =
-					< 1056000 MHZ_TO_MBPS(200, 8) >,
-					< 1401600 MHZ_TO_MBPS(451, 8) >,
-					< 1804800 MHZ_TO_MBPS(768, 8) >,
-					< 2016000 MHZ_TO_MBPS(931, 8) >;
+					< 1056000 MHZ_TO_MBPS(547, 8) >,
+					< 1401600 MHZ_TO_MBPS(768, 8) >,
+					< 1804800 MHZ_TO_MBPS(1017, 8) >,
+					< 2016000 MHZ_TO_MBPS(1555, 8) >;
 			};
 
 			ddr4-map {
 				qcom,ddr-type = <DDR_TYPE_LPDDR4X>;
 				qcom,core-dev-table =
-					<  902400 MHZ_TO_MBPS( 451, 8) >,
-					< 1401600 MHZ_TO_MBPS(1017, 8) >,
-					< 1804800 MHZ_TO_MBPS(1555, 8) >,
-					< 2016000 MHZ_TO_MBPS(1804, 8) >;
+					<  902400 MHZ_TO_MBPS( 1017, 8) >,
+					< 1401600 MHZ_TO_MBPS(1555, 8) >,
+					< 1804800 MHZ_TO_MBPS(1804, 8) >,
+					< 2016000 MHZ_TO_MBPS(2400, 8) >;
 			};
 		};
 
@@ -2513,21 +2515,21 @@
 			ddr3-map {
 				qcom,ddr-type = <DDR_TYPE_LPDDR3>;
 				qcom,core-dev-table =
-					<  652800 MHZ_TO_MBPS( 200, 8) >,
-					< 1056000 MHZ_TO_MBPS( 451, 8) >,
-					< 1401600 MHZ_TO_MBPS( 547, 8) >,
-					< 1536000 MHZ_TO_MBPS( 768, 8) >,
-					< 2016000 MHZ_TO_MBPS( 931, 8) >;
+					<  652800 MHZ_TO_MBPS( 451, 8) >,
+					< 1056000 MHZ_TO_MBPS( 547, 8) >,
+					< 1401600 MHZ_TO_MBPS( 768, 8) >,
+					< 1536000 MHZ_TO_MBPS( 931, 8) >,
+					< 2016000 MHZ_TO_MBPS( 1017, 8) >;
 			};
 
 			ddr4-map {
 				qcom,ddr-type = <DDR_TYPE_LPDDR4X>;
 				qcom,core-dev-table =
-					<  902400 MHZ_TO_MBPS( 300, 8) >,
-					< 1056000 MHZ_TO_MBPS( 547, 8) >,
-					< 1401680 MHZ_TO_MBPS( 768, 8) >,
-					< 1804800 MHZ_TO_MBPS(1017, 8) >,
-					< 2016000 MHZ_TO_MBPS(1804, 8) >;
+					<  902400 MHZ_TO_MBPS( 547, 8) >,
+					< 1056000 MHZ_TO_MBPS( 768, 8) >,
+					< 1401680 MHZ_TO_MBPS( 1017, 8) >,
+					< 1804800 MHZ_TO_MBPS(1804, 8) >,
+					< 2016000 MHZ_TO_MBPS(2400, 8) >;
 			};
 		};
 	};
