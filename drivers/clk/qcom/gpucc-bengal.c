@@ -260,9 +260,9 @@ static struct clk_rcg2 gpu_cc_gx_gfx3d_clk_src = {
 			[VDD_LOW_L1] = 600000000,
 			[VDD_NOMINAL] = 745000000,
 			[VDD_NOMINAL_L1] = 820000000,
-			[VDD_HIGH] = 900000000,
-			[VDD_HIGH_L1] = 980000000,
-			[VDD_HIGH_L2] = 1025088000},
+			[VDD_HIGH] = 980000000,
+			[VDD_HIGH_L1] = 1025088000, /*Overclock*/
+			
 	},
 };
 
