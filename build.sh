@@ -17,8 +17,8 @@ export PATH="$TC_DIR/bin:$PATH"
 export PATH="$TC_DIR/:$PATH" 
 export PATH="$GAS/bin:$PATH" 
 export PATH="$GAS/:$PATH"
-DEFCONFIG="stock_defconfig"
-KERNELNAME="StarX"
+DEFCONFIG="vendor/RMX2195_defconfig"
+KERNELNAME="StarXvKSU"
 clear
 echo -e " "
 echo -e "${txtbld}Config:${txtrst} $DEFCONFIG"
@@ -55,7 +55,7 @@ fi
 
 clang() {
 echo -e " "
-        git clone https://github.com/1ndev-ui/android_prebuilts_clang_host_linux-x86_clang-6443078 -b 11.0.1 ../clang --depth=1 
+        git clone https://github.com/techyminati/android_prebuilts_clang_host_linux-x86_clang-6443078 -b 11.0.1 ../clang --depth=1 
         git clone https://android.googlesource.com/platform/prebuilts/gas/linux-x86 -b master ../gas --depth=1 
 echo -e "Clone clang Compiler"
 sleep 2
@@ -67,11 +67,12 @@ fi
 compile() {
 
 # rm -rf out && mkdir -p out
-sed -i 's/^CONFIG_LOCALVERSION=".*"/CONFIG_LOCALVERSION="StarX"/' arch/arm64/configs/$DEFCONFIG   #Change Kernel Name Here
+# sed -i 's/^CONFIG_LOCALVERSION=".*"/CONFIG_LOCALVERSION="StarX"/' arch/arm64/configs/$DEFCONFIG   #Change Kernel Name Here
 echo -e "$blue    \nMake DefConfig\n $nocol"
 mkdir -p out
 make O=out ARCH=arm64 $DEFCONFIG
 grep CONFIG_LOCALVERSION out/.config
+make menuconfig ARCH=arm64 O=out $DEFCONFIG CC=clang
 
 sleep 2
 # Build start
