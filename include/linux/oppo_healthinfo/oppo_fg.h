@@ -7,7 +7,7 @@
 #define _OPPO_FG_H_
 
 #include <linux/cred.h>
-#include "../fs/fg_uid/fg_uid.h"
+#include "linux/fg_uid/fg_uid.h"
 
 #ifdef CONFIG_FG_TASK_UID
 static inline int current_is_fg(void)

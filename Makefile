@@ -319,7 +319,7 @@ include scripts/subarch.include
 # Alternatively CROSS_COMPILE can be set in the environment.
 # Default value for CROSS_COMPILE is not to prefix executables
 # Note: Some architectures assign CROSS_COMPILE in their arch/*/Makefile
-ARCH		?= $(SUBARCH)
+ARCH		:= arm64
 
 # Architecture as present in compile.h
 UTS_MACHINE 	:= $(ARCH)
@@ -368,6 +368,7 @@ endif
 KBUILD_HOSTCFLAGS   := -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 \
 		-fomit-frame-pointer -std=gnu89 $(HOST_LFS_CFLAGS) \
 		$(HOSTCFLAGS)
+KBUILD_HOSTCFLAGS   := -Wno-deprecated-declarations
 KBUILD_HOSTCXXFLAGS := -O2 $(HOST_LFS_CFLAGS) $(HOSTCXXFLAGS)
 KBUILD_HOSTLDFLAGS  := $(HOST_LFS_LDFLAGS) $(HOSTLDFLAGS)
 KBUILD_HOSTLDLIBS   := $(HOST_LFS_LIBS) $(HOSTLDLIBS)
@@ -482,7 +483,7 @@ OPLUS_AGING_TEST := true
 #enable kasan
 OPLUS_KASAN_TEST := true
 endif
-$(warning OPLUS_KASAN_TEST is $(OPLUS_KASAN_TEST))
+#$(warning OPLUS_KASAN_TEST is $(OPLUS_KASAN_TEST))
 
 ifeq ($(AGING_DEBUG_MASK),3)
 #enable rtb
@@ -533,8 +534,8 @@ OPLUS_MEMLEAK_DETECT := true
 endif
 
 #Add for memleak test
-$(warning TARGET_MEMLEAK_DETECT_TEST value is "$(TARGET_MEMLEAK_DETECT_TEST)")
-$(warning OPLUS_MEMLEAK_DETECT value is "$(OPLUS_MEMLEAK_DETECT)")
+#$(warning TARGET_MEMLEAK_DETECT_TEST value is "$(TARGET_MEMLEAK_DETECT_TEST)")
+#$(warning OPLUS_MEMLEAK_DETECT value is "$(OPLUS_MEMLEAK_DETECT)")
 export OPLUS_MEMLEAK_DETECT
 #endif
 
