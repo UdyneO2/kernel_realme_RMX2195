@@ -75,21 +75,6 @@ ifeq ($(KERNEL_BUILD), 0)
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/sdm660autoconf.h
 	endif
-	ifeq ($(CONFIG_ARCH_SDM450), y)
-		include $(AUDIO_ROOT)/config/sdm450auto.conf
-		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/sdm450autoconf.h
-	endif
-	ifeq ($(CONFIG_ARCH_SDM439), y)
-		include $(AUDIO_ROOT)/config/sdm450auto.conf
-		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/sdm450autoconf.h
-	endif
-	ifeq ($(CONFIG_ARCH_MSM8917), y)
-		include $(AUDIO_ROOT)/config/sdm450auto.conf
-		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/sdm450autoconf.h
-	endif
 endif
 
 # As per target team, build is done as follows:
@@ -200,6 +185,12 @@ endif
 ifdef CONFIG_SND_SOC_WCD_IRQ
 	CORE_OBJS += wcd-irq.o
 endif
+
+##ifdef OPLUS_ARCH_EXTENDS
+ifdef CONFIG_SND_SOC_AW87359_SPK
+	AW87359_SPK_OBJS += aw873xx/aw87359_spk_audio.o
+endif
+##endif /* OPLUS_ARCH_EXTENDS */
 
 LINUX_INC +=	-Iinclude/linux
 

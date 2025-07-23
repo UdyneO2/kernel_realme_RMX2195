@@ -14,7 +14,7 @@
 #define MAX_REQ_SLOTS                  48
 
 #define CAM_REQ_MGR_WATCHDOG_TIMEOUT          1000
-#define CAM_REQ_MGR_WATCHDOG_TIMEOUT_DEFAULT  5000
+#define CAM_REQ_MGR_WATCHDOG_TIMEOUT_DEFAULT  32000
 #define CAM_REQ_MGR_WATCHDOG_TIMEOUT_MAX      50000
 #define CAM_REQ_MGR_SCHED_REQ_TIMEOUT         1000
 #define CAM_REQ_MGR_SIMULATE_SCHED_REQ        30
@@ -35,8 +35,6 @@
 #define MAXIMUM_LINKS_PER_SESSION  4
 
 #define MAXIMUM_RETRY_ATTEMPTS 2
-
-#define MINIMUM_WORKQUEUE_SCHED_TIME_IN_MS 5
 
 #define VERSION_1  1
 #define VERSION_2  2
@@ -348,8 +346,6 @@ struct cam_req_mgr_connected_device {
  *                         as part of shutdown.
  * @sof_timestamp_value  : SOF timestamp value
  * @prev_sof_timestamp   : Previous SOF timestamp value
- * @last_sof_trigger_jiffies : Record the jiffies of last sof trigger jiffies
- * @wq_congestion        : Indicates if WQ congestion is detected or not
  */
 struct cam_req_mgr_core_link {
 	int32_t                              link_hdl;
@@ -380,8 +376,6 @@ struct cam_req_mgr_core_link {
 	bool                                 is_shutdown;
 	uint64_t                             sof_timestamp;
 	uint64_t                             prev_sof_timestamp;
-	uint64_t                             last_sof_trigger_jiffies;
-	bool                                 wq_congestion;
 };
 
 /**

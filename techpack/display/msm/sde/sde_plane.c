@@ -126,7 +126,6 @@ struct sde_plane {
 	struct sde_csc_cfg *csc_usr_ptr;
 	struct sde_csc_cfg *csc_ptr;
 
-	uint32_t cached_lut_flag;
 	const struct sde_sspp_sub_blks *pipe_sblk;
 
 	char pipe_name[SDE_NAME_SIZE];
@@ -1664,6 +1663,19 @@ void sde_plane_clear_multirect(const struct drm_plane_state *drm_state)
 	pstate->multirect_mode = SDE_SSPP_MULTIRECT_NONE;
 }
 
+#ifdef OPLUS_BUG_STABILITY
+int sde_plane_check_fingerprint_layer(const struct drm_plane_state *drm_state)
+{
+	struct sde_plane_state *pstate;
+
+	if (!drm_state)
+		return 0;
+
+	pstate = to_sde_plane_state(drm_state);
+
+	return sde_plane_get_property(pstate, PLANE_PROP_CUSTOM);
+}
+#endif
 /**
  * multi_rect validate API allows to validate only R0 and R1 RECT
  * passing for each plane. Client of this API must not pass multiple
@@ -2855,6 +2867,9 @@ static void _sde_plane_map_prop_to_dirty_bits(void)
 	/* no special action required */
 	plane_prop_array[PLANE_PROP_INFO] =
 	plane_prop_array[PLANE_PROP_ALPHA] =
+#ifdef OPLUS_BUG_STABILITY
+	plane_prop_array[PLANE_PROP_CUSTOM] =
+#endif /* OPLUS_BUG_STABILITY */
 	plane_prop_array[PLANE_PROP_INPUT_FENCE] =
 	plane_prop_array[PLANE_PROP_BLEND_OP] = 0;
 
@@ -3202,21 +3217,6 @@ static void _sde_plane_update_properties(struct drm_plane *plane,
 	pstate->dirty = 0x0;
 }
 
-static void _sde_plane_check_lut_dirty(struct sde_plane *psde,
-			struct sde_plane_state *pstate)
-{
-	/**
-	 * Valid configuration if scaler is not enabled or
-	 * lut flag is set
-	 */
-	if (pstate->scaler3_cfg.lut_flag || !pstate->scaler3_cfg.enable)
-		return;
-
-	pstate->scaler3_cfg.lut_flag = psde->cached_lut_flag;
-	SDE_EVT32(DRMID(&psde->base), pstate->scaler3_cfg.lut_flag,
-		SDE_EVTLOG_ERROR);
-}
-
 static int sde_plane_sspp_atomic_update(struct drm_plane *plane,
 				struct drm_plane_state *old_state)
 {
@@ -3267,16 +3267,10 @@ static int sde_plane_sspp_atomic_update(struct drm_plane *plane,
 			state->crtc_w, state->crtc_h,
 			state->crtc_x, state->crtc_y);
 
-	/* Caching the valid lut flag in sde plane */
-	if (pstate->scaler3_cfg.enable &&
-			pstate->scaler3_cfg.lut_flag)
-		psde->cached_lut_flag = pstate->scaler3_cfg.lut_flag;
-
 	/* force reprogramming of all the parameters, if the flag is set */
 	if (psde->revalidate) {
 		SDE_DEBUG("plane:%d - reconfigure all the parameters\n",
 				plane->base.id);
-		_sde_plane_check_lut_dirty(psde, pstate);
 		pstate->dirty = SDE_PLANE_DIRTY_ALL | SDE_PLANE_DIRTY_CP;
 		psde->revalidate = false;
 	}
@@ -3575,6 +3569,11 @@ static void _sde_plane_install_properties(struct drm_plane *plane,
 
 	msm_property_install_range(&psde->property_info, "zpos",
 		0x0, 0, zpos_max, zpos_def, PLANE_PROP_ZPOS);
+
+#ifdef OPLUS_BUG_STABILITY
+	msm_property_install_range(&psde->property_info,"PLANE_CUST",
+		0x0, 0, INT_MAX, 0, PLANE_PROP_CUSTOM);
+#endif
 
 	msm_property_install_range(&psde->property_info, "alpha",
 		0x0, 0, 255, 255, PLANE_PROP_ALPHA);

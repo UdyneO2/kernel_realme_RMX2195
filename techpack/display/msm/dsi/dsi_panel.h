@@ -20,6 +20,13 @@
 #include "dsi_pwr.h"
 #include "dsi_parser.h"
 #include "msm_drv.h"
+#ifdef OPLUS_BUG_STABILITY
+#include "dsi_oplus_support.h"
+struct oplus_brightness_alpha {
+	u32 brightness;
+	u32 alpha;
+};
+#endif /*OPLUS_BUG_STABILITY*/
 
 #define MAX_BL_LEVEL 4096
 #define MAX_BL_SCALE_LEVEL 1024
@@ -118,6 +125,12 @@ struct dsi_backlight_config {
 	u32 bl_min_level;
 	u32 bl_max_level;
 	u32 brightness_max_level;
+#ifdef OPLUS_BUG_STABILITY
+	u32 bl_normal_max_level;
+	u32 brightness_normal_max_level;
+	u32 brightness_default_level;
+#endif /* OPLUS_BUG_STABILITY */
+
 	u32 bl_level;
 	u32 bl_scale;
 	u32 bl_scale_sv;
@@ -171,6 +184,21 @@ struct drm_panel_esd_config {
 	u32 groups;
 };
 
+#ifdef OPLUS_BUG_STABILITY
+struct dsi_panel_oplus_privite {
+	const char *vendor_name;
+	const char *manufacture_name;
+	bool skip_mipi_last_cmd;
+	bool is_aod_ramless;
+	struct oplus_brightness_alpha *bl_remap;
+	int bl_remap_count;
+	bool dfps_idle_off;
+	bool brightness_alpha_rum;
+	bool bl_interpolate_nosub;
+	bool panel_cabc_soda;
+};
+#endif /* OPLUS_BUG_STABILITY */
+
 struct dsi_panel {
 	const char *name;
 	const char *type;
@@ -220,6 +248,25 @@ struct dsi_panel {
 	enum dsi_dms_mode dms_mode;
 
 	bool sync_broadcast_en;
+#ifdef OPLUS_BUG_STABILITY
+	bool is_hbm_enabled;
+	/* Fix aod flash problem */
+	bool need_power_on_backlight;
+	int avdd_check_gpio;
+	int avdd_out_gpio;
+	int avdd_out_plus_num;
+	int post_on_delay;
+	struct clk *iris_clk;
+	int iris_rst_gpio;
+	int abyp_gpio;
+	int abyp_status_gpio;
+	int iris_osd_gpio;
+	bool iris_osd_autorefresh;
+	int iris_vdd_gpio;
+	struct oplus_brightness_alpha *ba_seq;
+	int ba_count;
+	struct dsi_panel_oplus_privite oplus_priv;
+#endif
 
 	int panel_test_gpio;
 	int power_mode;
@@ -343,5 +390,8 @@ void dsi_panel_ext_bridge_put(struct dsi_panel *panel);
 
 void dsi_panel_calc_dsi_transfer_time(struct dsi_host_common_cfg *config,
 		struct dsi_display_mode *mode, u32 frame_threshold_us);
-
+#ifdef OPLUS_BUG_STABILITY
+int dsi_panel_tx_cmd_set(struct dsi_panel *panel,
+			   enum dsi_cmd_set_type type);
+#endif
 #endif /* _DSI_PANEL_H_ */

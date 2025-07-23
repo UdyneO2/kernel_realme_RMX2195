@@ -66,6 +66,20 @@ static const struct drm_prop_enum_list e_frame_trigger_mode[] = {
 	{FRAME_DONE_WAIT_POSTED_START, "posted_start"},
 };
 
+#ifdef OPLUS_BUG_STABILITY
+extern int oplus_debug_max_brightness;
+static int interpolate(int x, int xa, int xb, int ya, int yb)
+{
+	int bf, factor, plus;
+
+	bf = 2 * (yb - ya) * (x - xa) / (xb - xa);
+	factor = bf / 2;
+	plus = bf % 2;
+
+	return ya + factor + plus;
+}
+#endif
+
 static int sde_backlight_device_update_status(struct backlight_device *bd)
 {
 	int brightness;
@@ -87,9 +101,47 @@ static int sde_backlight_device_update_status(struct backlight_device *bd)
 	if (brightness > display->panel->bl_config.bl_max_level)
 		brightness = display->panel->bl_config.bl_max_level;
 
+#ifndef OPLUS_BUG_STABILITY
 	/* map UI brightness into driver backlight level with rounding */
 	bl_lvl = mult_frac(brightness, display->panel->bl_config.bl_max_level,
 			display->panel->bl_config.brightness_max_level);
+#else
+	if (oplus_debug_max_brightness) {
+		bl_lvl = mult_frac(brightness, oplus_debug_max_brightness,
+			display->panel->bl_config.brightness_max_level);
+	} else if (brightness == 0) {
+		bl_lvl = 0;
+	} else {
+		if (display->panel->oplus_priv.bl_remap && display->panel->oplus_priv.bl_remap_count) {
+			int i = 0;
+			int count = display->panel->oplus_priv.bl_remap_count;
+			struct oplus_brightness_alpha *lut = display->panel->oplus_priv.bl_remap;
+
+			for (i = 0; i < display->panel->oplus_priv.bl_remap_count; i++){
+				if (display->panel->oplus_priv.bl_remap[i].brightness >= brightness)
+					break;
+			}
+
+			if (i == 0)
+				bl_lvl = lut[0].alpha;
+			else if (i == count)
+				bl_lvl = lut[count - 1].alpha;
+			else
+				bl_lvl = interpolate(brightness, lut[i-1].brightness,
+						lut[i].brightness, lut[i-1].alpha,
+						lut[i].alpha);
+		} else if (brightness > display->panel->bl_config.brightness_normal_max_level) {
+			bl_lvl = interpolate(brightness,
+					display->panel->bl_config.brightness_normal_max_level,
+					display->panel->bl_config.brightness_max_level,
+					display->panel->bl_config.bl_normal_max_level,
+					display->panel->bl_config.bl_max_level);
+		} else {
+			bl_lvl = mult_frac(brightness, display->panel->bl_config.bl_normal_max_level,
+					display->panel->bl_config.brightness_normal_max_level);
+		}
+	}
+#endif
 
 	if (!bl_lvl && brightness)
 		bl_lvl = 1;
@@ -148,7 +200,11 @@ static int sde_backlight_setup(struct sde_connector *c_conn,
 	display = (struct dsi_display *) c_conn->display;
 	bl_config = &display->panel->bl_config;
 	props.max_brightness = bl_config->brightness_max_level;
+#ifndef OPLUS_BUG_STABILITY
 	props.brightness = bl_config->brightness_max_level;
+#else
+	props.brightness = bl_config->brightness_default_level;
+#endif  /*VENDOR_EDIT*/
 	snprintf(bl_node_name, BL_NODE_NAME_SIZE, "panel%u-backlight",
 							display_count);
 	c_conn->bl_device = backlight_device_register(bl_node_name, dev->dev,
@@ -572,6 +628,9 @@ static int _sde_connector_update_bl_scale(struct sde_connector *c_conn)
 	struct dsi_backlight_config *bl_config;
 	int rc = 0;
 
+#ifdef OPLUS_BUG_STABILITY
+	struct backlight_device *bd;
+#endif /* OPLUS_BUG_STABILITY */
 	if (!c_conn) {
 		SDE_ERROR("Invalid params sde_connector null\n");
 		return -EINVAL;
@@ -585,10 +644,22 @@ static int _sde_connector_update_bl_scale(struct sde_connector *c_conn)
 		return -EINVAL;
 	}
 
+#ifdef OPLUS_BUG_STABILITY
+	bd = c_conn->bl_device;
+	if (!bd) {
+		SDE_ERROR("Invalid params backlight_device null\n");
+		return -EINVAL;
+	}
+
+	mutex_lock(&bd->update_lock);
+#endif /* OPLUS_BUG_STABILITY */
 	bl_config = &dsi_display->panel->bl_config;
 
 	if (!c_conn->allow_bl_update) {
 		c_conn->unset_bl_level = bl_config->bl_level;
+#ifdef OPLUS_BUG_STABILITY
+		mutex_unlock(&bd->update_lock);
+#endif /* OPLUS_BUG_STABILITY */
 		return 0;
 	}
 
@@ -606,6 +677,10 @@ static int _sde_connector_update_bl_scale(struct sde_connector *c_conn)
 	rc = c_conn->ops.set_backlight(&c_conn->base,
 			dsi_display, bl_config->bl_level);
 	c_conn->unset_bl_level = 0;
+
+#ifdef OPLUS_BUG_STABILITY
+	mutex_unlock(&bd->update_lock);
+#endif /* OPLUS_BUG_STABILITY */
 
 	return rc;
 }
@@ -672,6 +747,366 @@ void sde_connector_complete_qsync_commit(struct drm_connector *conn,
 		SDE_EVT32(conn->base.id, c_conn->qsync_mode);
 	}
 }
+
+#ifdef OPLUS_BUG_STABILITY
+extern bool sde_crtc_get_fingerprint_mode(struct drm_crtc_state *crtc_state);
+extern bool sde_crtc_get_fingerprint_pressed(struct drm_crtc_state *crtc_state);
+extern int oplus_display_get_hbm_mode(void);
+extern int sde_crtc_set_onscreenfinger_defer_sync(struct drm_crtc_state *crtc_state, bool defer_sync);
+extern int oplus_dimlayer_bl;
+extern int oplus_dimlayer_bl_enable_real;
+extern int oplus_dimlayer_bl_enable;
+extern int oplus_dimlayer_bl_enabled;
+extern int oplus_dimlayer_bl_delay;
+extern int oplus_dimlayer_bl_delay_after;
+extern int oplus_dimlayer_bl_enable_v2;
+extern int oplus_dimlayer_bl_enable_v3;
+int oplus_dimlayer_bl_enable_v2_real = 0;
+extern int oplus_dimlayer_bl_enable_v3_real;
+extern int oplus_datadimming_vblank_count;
+extern atomic_t oplus_datadimming_vblank_ref;
+int oplus_datadimming_v3_skip_frame = 2;
+int sde_connector_update_backlight(struct drm_connector *connector)
+{
+	if (oplus_dimlayer_bl != oplus_dimlayer_bl_enabled) {
+		struct sde_connector *c_conn = to_sde_connector(connector);
+
+		oplus_dimlayer_bl_enabled = oplus_dimlayer_bl;
+		usleep_range(oplus_dimlayer_bl_delay, oplus_dimlayer_bl_delay + 100);
+		_sde_connector_update_bl_scale(c_conn);
+		usleep_range(oplus_dimlayer_bl_delay_after, oplus_dimlayer_bl_delay_after + 100);
+	}
+
+	if (oplus_dimlayer_bl_enable_v2 != oplus_dimlayer_bl_enable_v2_real) {
+		struct sde_connector *c_conn = to_sde_connector(connector);
+
+		oplus_dimlayer_bl_enable_v2_real = oplus_dimlayer_bl_enable_v2;
+		_sde_connector_update_bl_scale(c_conn);
+	}
+
+	if (oplus_dimlayer_bl_enable_v3 != oplus_dimlayer_bl_enable_v3_real) {
+		struct sde_connector *c_conn = to_sde_connector(connector);
+
+		if (oplus_datadimming_v3_skip_frame > 0) {
+			oplus_datadimming_v3_skip_frame--;
+		} else {
+			oplus_dimlayer_bl_enable_v3_real = oplus_dimlayer_bl_enable_v3;
+			_sde_connector_update_bl_scale(c_conn);
+			oplus_datadimming_v3_skip_frame=2;
+		}
+	}
+
+	if (oplus_datadimming_vblank_count> 0) {
+		oplus_datadimming_vblank_count--;
+	} else {
+		while (atomic_read(&oplus_datadimming_vblank_ref) > 0) {
+			drm_crtc_vblank_put(connector->state->crtc);
+			atomic_dec(&oplus_datadimming_vblank_ref);
+		}
+	}
+
+	return 0;
+}
+
+extern int oplus_seed_backlight;
+extern int oplus_dimlayer_hbm_vblank_count;
+extern atomic_t oplus_dimlayer_hbm_vblank_ref;
+extern int oplus_fod_on_vblank;
+extern int oplus_fod_off_vblank;
+extern int oplus_panel_update_backlight_unlock(struct dsi_panel *panel);
+extern int oplus_panel_process_dimming_v2(struct dsi_panel *panel, int bl_lvl, bool force_disable);
+extern void oplus_panel_process_dimming_v2_post(struct dsi_panel *panel, bool force_disable);
+extern int oplus_update_aod_light_mode_unlock(struct dsi_panel *panel);
+bool oplus_skip_datadimming_sync = false;
+extern int oplus_display_mode;
+extern ktime_t oplus_backlight_time;
+static struct task_struct *hbm_notify_task;
+static wait_queue_head_t hbm_notify_task_wq;
+static atomic_t hbm_task_task_wakeup = ATOMIC_INIT(0);
+static void hbm_notify_init(void);
+int hbm_delay_off = 0;
+extern dsi_hbm_off_delay(int delay);
+extern bool oplus_first_vid;
+extern int oplus_aod_mode;
+
+static int hbm_notify_worker_kthread(void *data)
+{
+	int ret = 0;
+
+	while (1) {
+		ret = wait_event_interruptible(hbm_notify_task_wq, atomic_read(&hbm_task_task_wakeup));
+		atomic_set(&hbm_task_task_wakeup, 0);
+		dsi_hbm_off_delay(23);
+		if (kthread_should_stop())
+			break;
+	}
+	return 0;
+}
+
+static void hbm_notify_init(void)
+{
+	if (!hbm_notify_task) {
+		hbm_notify_task = kthread_create(hbm_notify_worker_kthread, NULL,"hbm_off_notify");
+		init_waitqueue_head(&hbm_notify_task_wq);
+		wake_up_process(hbm_notify_task);
+		pr_info("[hbmnotify]  init CREATE\n");
+	}
+	/* pr_info("[hbmnotify] init\n"); */
+}
+
+void hbm_notify(void)
+{
+	if (hbm_notify_task != NULL) {
+		hbm_delay_off = 1;
+		oplus_first_vid = false;
+		atomic_set(&hbm_task_task_wakeup, 1);
+		wake_up_interruptible(&hbm_notify_task_wq);
+		/* pr_info("[hbmoffnotify] notify\n"); */
+	} else {
+		pr_info("[hbmoffnotify] notify is NULL\n");
+	}
+}
+int sde_connector_update_hbm(struct drm_connector *connector)
+{
+	struct sde_connector *c_conn = to_sde_connector(connector);
+	struct dsi_display *dsi_display;
+	struct sde_connector_state *c_state;
+	int rc = 0;
+	int fingerprint_mode;
+
+	if (!c_conn) {
+		SDE_ERROR("Invalid params sde_connector null\n");
+		return -EINVAL;
+	}
+
+	if (c_conn->connector_type != DRM_MODE_CONNECTOR_DSI)
+		return 0;
+
+	c_state = to_sde_connector_state(connector->state);
+
+	dsi_display = c_conn->display;
+	if (!dsi_display || !dsi_display->panel) {
+		SDE_ERROR("Invalid params(s) dsi_display %pK, panel %pK\n",
+			dsi_display,
+			((dsi_display) ? dsi_display->panel : NULL));
+		return -EINVAL;
+	}
+
+	if (!c_conn->encoder || !c_conn->encoder->crtc ||
+	    !c_conn->encoder->crtc->state) {
+		return 0;
+	}
+
+	fingerprint_mode = sde_crtc_get_fingerprint_mode(c_conn->encoder->crtc->state);
+
+	if (OPLUS_DISPLAY_AOD_SCENE == get_oplus_display_scene()) {
+		if (sde_crtc_get_fingerprint_pressed(c_conn->encoder->crtc->state)) {
+			sde_crtc_set_onscreenfinger_defer_sync(c_conn->encoder->crtc->state, true);
+		} else {
+			sde_crtc_set_onscreenfinger_defer_sync(c_conn->encoder->crtc->state, false);
+			fingerprint_mode = false;
+		}
+	} else {
+		sde_crtc_set_onscreenfinger_defer_sync(c_conn->encoder->crtc->state, false);
+	}
+
+	if (fingerprint_mode != dsi_display->panel->is_hbm_enabled) {
+		struct drm_crtc *crtc = c_conn->encoder->crtc;
+		struct dsi_panel *panel = dsi_display->panel;
+		int vblank = 0;
+		u32 target_vblank, current_vblank;
+		int ret;
+
+		if (oplus_fod_on_vblank >= 0)
+			panel->cur_mode->priv_info->fod_on_vblank = oplus_fod_on_vblank;
+		if (oplus_fod_off_vblank >= 0)
+			panel->cur_mode->priv_info->fod_off_vblank = oplus_fod_off_vblank;
+
+		if (dsi_display->panel->oplus_priv.is_aod_ramless)
+			hbm_notify_init();
+
+		pr_err("OnscreenFingerprint mode: %s",
+		       fingerprint_mode ? "Enter" : "Exit");
+
+		dsi_display->panel->is_hbm_enabled = fingerprint_mode;
+		if (fingerprint_mode) {
+			if (!dsi_display->panel->oplus_priv.is_aod_ramless || oplus_display_mode) {
+				mutex_lock(&dsi_display->panel->panel_lock);
+
+				if (!dsi_display->panel->panel_initialized) {
+					dsi_display->panel->is_hbm_enabled = false;
+					pr_err("panel not initialized, failed to Enter OnscreenFingerprint\n");
+					mutex_unlock(&dsi_display->panel->panel_lock);
+					return 0;
+				}
+
+				dsi_display_clk_ctrl(dsi_display->dsi_clk_handle,
+						DSI_CORE_CLK, DSI_CLK_ON);
+
+				if (oplus_seed_backlight) {
+					int frame_time_us;
+
+					frame_time_us = mult_frac(1000, 1000, panel->cur_mode->timing.refresh_rate);
+					oplus_panel_process_dimming_v2(panel, panel->bl_config.bl_level, true);
+					mipi_dsi_dcs_set_display_brightness(&panel->mipi_device, panel->bl_config.bl_level);
+					oplus_panel_process_dimming_v2_post(panel, true);
+					usleep_range(frame_time_us, frame_time_us + 100);
+				} else if (dsi_display->panel->oplus_priv.is_aod_ramless) {
+					ktime_t delta = ktime_sub(ktime_get(), oplus_backlight_time);
+					s64 delta_us = ktime_to_us(delta);
+					if (delta_us < 34000 && delta_us >= 0)
+						usleep_range(34000 - delta_us, 34000 - delta_us + 100);
+				}
+
+				if (OPLUS_DISPLAY_AOD_SCENE != get_oplus_display_scene() &&
+						dsi_display->panel->bl_config.bl_level) {
+					if (dsi_display->config.panel_mode != DSI_OP_VIDEO_MODE) {
+						current_vblank = drm_crtc_vblank_count(crtc);
+						ret = wait_event_timeout(*drm_crtc_vblank_waitqueue(crtc),
+								current_vblank != drm_crtc_vblank_count(crtc),
+								msecs_to_jiffies(17));
+					}
+
+					vblank = panel->cur_mode->priv_info->fod_on_vblank;
+					target_vblank = drm_crtc_vblank_count(crtc) + vblank;
+					rc = dsi_panel_tx_cmd_set(dsi_display->panel, DSI_CMD_AOD_HBM_ON);
+
+					if (vblank) {
+						ret = wait_event_timeout(*drm_crtc_vblank_waitqueue(crtc),
+								target_vblank == drm_crtc_vblank_count(crtc),
+								msecs_to_jiffies((vblank + 1) * 17 ));
+						if (!ret) {
+							pr_err("OnscreenFingerprint failed to wait vblank timeout target_vblank=%d current_vblank=%d\n",
+									target_vblank, drm_crtc_vblank_count(crtc));
+						}
+					}
+				} else {
+					rc = dsi_panel_tx_cmd_set(dsi_display->panel, DSI_CMD_AOD_HBM_ON);
+				}
+
+				dsi_display_clk_ctrl(dsi_display->dsi_clk_handle,
+						DSI_CORE_CLK, DSI_CLK_OFF);
+
+				mutex_unlock(&dsi_display->panel->panel_lock);
+				if (rc) {
+					pr_err("failed to send DSI_CMD_HBM_ON cmds, rc=%d\n", rc);
+					return rc;
+				}
+			}
+		} else {
+			mutex_lock(&dsi_display->panel->panel_lock);
+
+			if (!dsi_display->panel->panel_initialized) {
+				dsi_display->panel->is_hbm_enabled = true;
+				pr_err("panel not initialized, failed to Exit OnscreenFingerprint\n");
+				mutex_unlock(&dsi_display->panel->panel_lock);
+				return 0;
+			}
+
+			current_vblank = drm_crtc_vblank_count(crtc);
+
+			ret = wait_event_timeout(*drm_crtc_vblank_waitqueue(crtc),
+					current_vblank != drm_crtc_vblank_count(crtc),
+					msecs_to_jiffies(17));
+
+			oplus_skip_datadimming_sync = true;
+			oplus_panel_update_backlight_unlock(panel);
+			oplus_skip_datadimming_sync = false;
+
+			vblank = panel->cur_mode->priv_info->fod_off_vblank;
+			target_vblank = drm_crtc_vblank_count(crtc) + vblank;
+
+			dsi_display_clk_ctrl(dsi_display->dsi_clk_handle,
+					     DSI_CORE_CLK, DSI_CLK_ON);
+			if (dsi_display->config.panel_mode == DSI_OP_VIDEO_MODE)
+				panel->oplus_priv.skip_mipi_last_cmd = true;
+			if (dsi_display->config.panel_mode == DSI_OP_VIDEO_MODE)
+				panel->oplus_priv.skip_mipi_last_cmd = false;
+			if(OPLUS_DISPLAY_AOD_HBM_SCENE == get_oplus_display_scene()) {
+				if (OPLUS_DISPLAY_POWER_DOZE_SUSPEND == get_oplus_display_power_status() ||
+				    OPLUS_DISPLAY_POWER_DOZE == get_oplus_display_power_status()) {
+					rc = dsi_panel_tx_cmd_set(dsi_display->panel, DSI_CMD_AOD_HBM_OFF);
+					oplus_update_aod_light_mode_unlock(panel);
+					set_oplus_display_scene(OPLUS_DISPLAY_AOD_SCENE);
+				} else {
+					rc = dsi_panel_tx_cmd_set(dsi_display->panel, DSI_CMD_SET_NOLP);
+
+					if (dsi_display->panel->oplus_priv.is_aod_ramless)
+						hbm_notify();
+
+					/* set nolp would exit hbm, restore when panel status on hbm */
+					if(panel->bl_config.bl_level > panel->bl_config.brightness_normal_max_level)
+						oplus_panel_update_backlight_unlock(panel);
+					if (oplus_display_get_hbm_mode())
+						rc = dsi_panel_tx_cmd_set(dsi_display->panel, DSI_CMD_AOD_HBM_ON);
+					set_oplus_display_scene(OPLUS_DISPLAY_NORMAL_SCENE);
+				}
+			} else if (oplus_display_get_hbm_mode()) {
+				/* Do nothing to skip hbm off */
+			} else if(OPLUS_DISPLAY_AOD_SCENE == get_oplus_display_scene()) {
+				rc = dsi_panel_tx_cmd_set(dsi_display->panel, DSI_CMD_AOD_HBM_OFF);
+				oplus_update_aod_light_mode_unlock(panel);
+			} else {
+				if (dsi_display->panel->oplus_priv.is_aod_ramless) {
+					hbm_notify();
+				} else {
+					rc = dsi_panel_tx_cmd_set(dsi_display->panel, DSI_CMD_HBM_OFF);
+				}
+			}
+
+			dsi_display_clk_ctrl(dsi_display->dsi_clk_handle,
+					     DSI_CORE_CLK, DSI_CLK_OFF);
+			mutex_unlock(&dsi_display->panel->panel_lock);
+			if (vblank) {
+				ret = wait_event_timeout(*drm_crtc_vblank_waitqueue(crtc),
+						target_vblank == drm_crtc_vblank_count(crtc),
+						msecs_to_jiffies((vblank + 1) * 17 ));
+				if (!ret) {
+					pr_err("OnscreenFingerprint failed to wait vblank timeout target_vblank=%d current_vblank=%d\n",
+							target_vblank, drm_crtc_vblank_count(crtc));
+				}
+			}
+		}
+	}else if (!dsi_display->panel->is_hbm_enabled \
+		&& oplus_first_vid && dsi_display->panel->oplus_priv.is_aod_ramless && !oplus_aod_mode) {
+		mutex_lock(&dsi_display->panel->panel_lock);
+
+		if (!dsi_display->panel->panel_initialized) {
+			pr_err("panel not initialized, failed to Enter OnscreenFingerprint\n");
+			mutex_unlock(&dsi_display->panel->panel_lock);
+			return 0;
+		}
+
+		dsi_display_clk_ctrl(dsi_display->dsi_clk_handle,
+			DSI_CORE_CLK, DSI_CLK_ON);
+
+		rc = dsi_panel_tx_cmd_set(dsi_display->panel, DSI_CMD_HBM_OFF);
+		pr_err("aod out to send DSI_CMD_HBM_OFF\n");
+
+		dsi_display_clk_ctrl(dsi_display->dsi_clk_handle,
+			DSI_CORE_CLK, DSI_CLK_OFF);
+
+		mutex_unlock(&dsi_display->panel->panel_lock);
+		if (rc) {
+			pr_err("failed to send DSI_CMD_HBM_OFF cmds, rc=%d\n", rc);
+			return rc;
+		}
+
+		oplus_first_vid = false;
+	}
+
+	if (oplus_dimlayer_hbm_vblank_count > 0) {
+		oplus_dimlayer_hbm_vblank_count--;
+	} else {
+		while (atomic_read(&oplus_dimlayer_hbm_vblank_ref) > 0) {
+			drm_crtc_vblank_put(connector->state->crtc);
+			atomic_dec(&oplus_dimlayer_hbm_vblank_ref);
+		}
+	}
+
+	return 0;
+}
+#endif
 
 static int _sde_connector_update_hdr_metadata(struct sde_connector *c_conn,
 		struct sde_connector_state *c_state)
@@ -788,6 +1223,10 @@ int sde_connector_pre_kickoff(struct drm_connector *connector)
 	if (c_conn->connector_type == DRM_MODE_CONNECTOR_DSI) {
 		display = (struct dsi_display *)c_conn->display;
 		display->queue_cmd_waits = true;
+		#ifdef OPLUS_BUG_STABILITY
+		if (display->config.panel_mode == DSI_OP_VIDEO_MODE)
+			display->queue_cmd_waits = false;
+		#endif /* OPLUS_BUG_STABILITY */
 	}
 
 	rc = _sde_connector_update_dirty_properties(connector);
@@ -2526,6 +2965,10 @@ static int _sde_connector_install_properties(struct drm_device *dev,
 				ARRAY_SIZE(e_frame_trigger_mode),
 				CONNECTOR_PROP_CMD_FRAME_TRIGGER_MODE);
 	}
+#ifdef OPLUS_BUG_STABILITY
+	msm_property_install_range(&c_conn->property_info,"CONNECTOR_CUST",
+		0x0, 0, INT_MAX, 0, CONNECTOR_PROP_CUSTOM);
+#endif
 
 	msm_property_install_range(&c_conn->property_info, "bl_scale",
 		0x0, 0, MAX_BL_SCALE_LEVEL, MAX_BL_SCALE_LEVEL,

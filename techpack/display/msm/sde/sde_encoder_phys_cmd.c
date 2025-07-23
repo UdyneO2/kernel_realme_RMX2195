@@ -25,6 +25,10 @@
 
 #define PP_TIMEOUT_MAX_TRIALS	4
 
+#ifdef OPLUS_BUG_STABILITY
+#define PP_TIMEOUT_BAD_TRIALS   10
+extern int oplus_dimlayer_fingerprint_failcount;
+#endif
 /*
  * Tearcheck sync start and continue thresholds are empirically found
  * based on common panels In the future, may want to allow panels to override
@@ -503,6 +507,11 @@ static int _sde_encoder_phys_cmd_handle_ppdone_timeout(
 	/* decrement the kickoff_cnt before checking for ESD status */
 	if (!atomic_add_unless(&phys_enc->pending_kickoff_cnt, -1, 0))
 		return 0;
+
+#ifdef OPLUS_BUG_STABILITY
+	if (cmd_enc->pp_timeout_report_cnt >= PP_TIMEOUT_BAD_TRIALS)
+		return -EFAULT;
+#endif
 
 	cmd_enc->pp_timeout_report_cnt++;
 	pending_kickoff_cnt = atomic_read(&phys_enc->pending_kickoff_cnt) + 1;

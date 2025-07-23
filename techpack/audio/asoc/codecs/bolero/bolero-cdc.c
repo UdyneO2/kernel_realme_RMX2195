@@ -1229,10 +1229,60 @@ static void bolero_soc_codec_remove(struct snd_soc_component *component)
 	return;
 }
 
+
+#ifdef OPLUS_ARCH_EXTENDS
+static const char * const bolero_reg_dump_text[] = {
+	"ALL",
+};
+
+static SOC_ENUM_SINGLE_EXT_DECL(bolero_reg_dump_enum,
+				bolero_reg_dump_text);
+static int bolero_reg_dump_set(struct snd_kcontrol *kcontrol,
+				 struct snd_ctl_elem_value *ucontrol)
+{
+	int i = 0;
+	u32 reg = 0;
+	struct snd_soc_component *component = NULL;
+	struct bolero_priv *bolero = NULL;
+
+	if (!kcontrol) {
+		return -1;
+	}
+	component = snd_soc_kcontrol_component(kcontrol);
+
+	if (!component) {
+		return -1;
+	}
+	bolero = snd_soc_component_get_drvdata(component);
+
+	if (!bolero || !(bolero->regmap)) {
+		return -1;
+	}
+	dev_err(component->dev, "bolero_reg_dump");
+	for (i = 0; i < bolero_regmap_config.num_reg_defaults; i++) {
+		regmap_read(bolero->regmap, bolero_regmap_config.reg_defaults[i].reg, &reg);
+		dev_err(component->dev, "%04x:%04x\n",
+			bolero_regmap_config.reg_defaults[i].reg, reg);
+	}
+	dev_err(component->dev, "bolero_reg_dump end");
+	return 0;
+}
+
+static const struct snd_kcontrol_new bolero_soc_controls[] = {
+	SOC_ENUM_EXT("BOLERO REG DUMP", bolero_reg_dump_enum,
+		NULL, bolero_reg_dump_set),
+};
+
+#endif /* OPLUS_ARCH_EXTENDS */
+
 static const struct snd_soc_component_driver bolero = {
 	.name = DRV_NAME,
 	.probe = bolero_soc_codec_probe,
 	.remove = bolero_soc_codec_remove,
+#ifdef OPLUS_ARCH_EXTENDS
+	.controls = bolero_soc_controls,
+	.num_controls = ARRAY_SIZE(bolero_soc_controls),
+#endif
 };
 
 static void bolero_add_child_devices(struct work_struct *work)
@@ -1379,6 +1429,7 @@ static int bolero_probe(struct platform_device *pdev)
 	mutex_init(&priv->vote_lock);
 	INIT_WORK(&priv->bolero_add_child_devices_work,
 		  bolero_add_child_devices);
+	schedule_work(&priv->bolero_add_child_devices_work);
 
 	/* Register LPASS core hw vote */
 	lpass_core_hw_vote = devm_clk_get(&pdev->dev, "lpass_core_hw_vote");
@@ -1402,7 +1453,6 @@ static int bolero_probe(struct platform_device *pdev)
 	}
 	priv->lpass_audio_hw_vote = lpass_audio_hw_vote;
 
-	schedule_work(&priv->bolero_add_child_devices_work);
 	return 0;
 }
 

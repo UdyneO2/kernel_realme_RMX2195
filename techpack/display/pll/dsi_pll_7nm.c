@@ -1055,9 +1055,15 @@ static int dsi_pll_read_stored_trim_codes(struct mdss_pll_resources *pll_res,
 			codes_info->pll_codes.pll_codes_2,
 			codes_info->pll_codes.pll_codes_3);
 
+		#ifdef VENDOR_EDIT
+		if ((vco_clk_rate / 1000) != (codes_info->clk_rate / 1000) &&
+				codes_info->is_valid) {
+		#else
 		if (vco_clk_rate != codes_info->clk_rate &&
-				codes_info->is_valid)
+				codes_info->is_valid) {
+		#endif /* VENDOR_EDIT */
 			continue;
+		}
 
 		pll_res->cache_pll_trim_codes[0] =
 			codes_info->pll_codes.pll_codes_1;

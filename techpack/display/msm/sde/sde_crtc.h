@@ -430,6 +430,12 @@ struct sde_crtc_state {
 	struct sde_hw_scaler3_lut_cfg scl3_lut_cfg;
 
 	struct sde_core_perf_params new_perf;
+#ifdef OPLUS_BUG_STABILITY
+	bool fingerprint_mode;
+	bool fingerprint_pressed;
+	bool fingerprint_defer_sync;
+	struct sde_hw_dim_layer *fingerprint_dim_layer;
+#endif
 	int secure_session;
 };
 
@@ -860,12 +866,6 @@ void sde_crtc_get_misr_info(struct drm_crtc *crtc,
  */
 int sde_crtc_get_num_datapath(struct drm_crtc *crtc,
 		struct drm_connector *connector);
-
-/**
- * _sde_crtc_clear_dim_layers_v1 - clear all dim layer settings
- * @cstate:      Pointer to drm crtc state
- */
-void _sde_crtc_clear_dim_layers_v1(struct drm_crtc_state *state);
 
 /*
  * sde_crtc_set_compression_ratio - set compression ratio src_bpp/target_bpp

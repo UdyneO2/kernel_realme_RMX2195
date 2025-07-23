@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/delay.h>
@@ -60,7 +60,6 @@ static const struct of_device_id msm_cam_hw_cdm_dt_match[] = {
 		.compatible = CAM_HW_CDM_OPE_NAME_2_0,
 		.data = &cam_cdm_2_0_reg_offset,
 	},
-	{},
 };
 
 static enum cam_cdm_id cam_hw_cdm_get_id_by_name(char *name)
@@ -965,6 +964,7 @@ int cam_hw_cdm_submit_bl(struct cam_hw_info *cdm_hw,
 					rc = -EIO;
 					break;
 				}
+				write_count--;
 			}
 		} else {
 			CAM_ERR(CAM_CDM,
@@ -1587,11 +1587,6 @@ int cam_hw_cdm_handle_error_info(
 	reinit_completion(&cdm_core->reset_complete);
 	set_bit(CAM_CDM_RESET_HW_STATUS, &cdm_core->cdm_status);
 	set_bit(CAM_CDM_FLUSH_HW_STATUS, &cdm_core->cdm_status);
-
-	if (cdm_hw->hw_state == CAM_HW_STATE_POWER_DOWN) {
-		CAM_WARN(CAM_CDM, "CDM is in power down state");
-		goto end;
-	}
 
 	/* First pause CDM, If it fails still proceed to dump debug info */
 	cam_hw_cdm_pause_core(cdm_hw, true);

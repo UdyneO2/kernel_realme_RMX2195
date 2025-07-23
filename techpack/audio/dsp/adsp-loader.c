@@ -17,6 +17,8 @@
 #include <linux/nvmem-consumer.h>
 #include <linux/slab.h>
 #include <soc/qcom/subsystem_restart.h>
+#include <linux/of_gpio.h>
+#include <linux/gpio.h>
 
 #define Q6_PIL_GET_DELAY_MS 100
 #define BOOT_CMD 1
@@ -63,6 +65,12 @@ static void adsp_load_fw(struct work_struct *adsp_ldr_work)
 	int rc = 0;
 	u32 adsp_state;
 	const char *img_name;
+	const char *adsp_img;
+	int accel_gpio = 0;
+	int prox_gpio =0;
+	int accel_gpio_val =0;
+	int prox_gpio_val =0;
+	pr_err("%s: call\n", __func__);
 
 	if (!pdev) {
 		dev_err(&pdev->dev, "%s: Platform device null\n", __func__);
@@ -132,15 +140,49 @@ load_adsp:
 				" %s: Private data get failed\n", __func__);
 				goto fail;
 			}
-			if (!priv->adsp_fw_name) {
-				dev_dbg(&pdev->dev, "%s: Load default ADSP\n",
-					__func__);
+#ifdef VENDOR_EDIT
+	rc = of_property_read_string(pdev->dev.of_node,
+			"adsp-firmware",
+			&adsp_img);
+	if(rc){
+		   dev_dbg(&pdev->dev,
+					"%s: loading default image ADSP\n", __func__);
+					adsp_img = NULL;
+		  if(!priv->adsp_fw_name) {
+				dev_dbg(&pdev->dev, "%s: Load default ADSP\n",__func__);
 				priv->pil_h = subsystem_get("adsp");
-			} else {
-				dev_dbg(&pdev->dev, "%s: Load ADSP with fw name %s\n",
-					__func__, priv->adsp_fw_name);
-				priv->pil_h = subsystem_get_with_fwname("adsp", priv->adsp_fw_name);
-			}
+		    } else {
+			     dev_dbg(&pdev->dev, "%s: Load ADSP with fw name %s\n",
+				    __func__, priv->adsp_fw_name);
+			     priv->pil_h = subsystem_get_with_fwname("adsp", priv->adsp_fw_name);
+				  }
+	} else {
+				dev_err(&pdev->dev, "%s: adsp-firmware = %s\n",__func__, adsp_img);
+				accel_gpio = of_get_named_gpio(pdev->dev.of_node, "adsp-accel-gpio", 0);
+				prox_gpio = of_get_named_gpio(pdev->dev.of_node, "adsp-prox-gpio", 0);
+				if (!gpio_is_valid(accel_gpio) || !gpio_is_valid(prox_gpio)) {
+				      dev_err(&pdev->dev, "%s: gpio not specified\n",__func__);
+				  } else {
+					    accel_gpio_val = gpio_get_value(accel_gpio);
+					    prox_gpio_val = gpio_get_value(prox_gpio);
+					    dev_err(&pdev->dev, "%s: accel_gpio_val =%d, prox_gpio_val =%d \n", 
+								__func__, accel_gpio_val, prox_gpio_val);
+				        if (accel_gpio_val == 0 && prox_gpio_val == 1) { //stk33502,lis2hh12
+						    adsp_img = "adsp2_v1";
+					    } else if (accel_gpio_val == 1 && prox_gpio_val == 0) { //mn78911,bma420
+						    adsp_img = "adsp2_v2";
+					    } else if (accel_gpio_val == 1 && prox_gpio_val == 1) { //stk33502,bma420
+						    adsp_img = "adsp2_v3";
+					    } else if (accel_gpio_val == 0 && prox_gpio_val == 0) { //mn78911,lis2hh12
+						    adsp_img = "adsp2_v4";
+					    } else {
+						    dev_err(&pdev->dev, "%s: get invalid prox_gpio_val and accel_gpio_val.\n",__func__);
+					    }
+					    dev_err(&pdev->dev, "%s: adsp_img: %s\n",__func__,adsp_img);
+					    priv->pil_h = subsystem_get_with_fwname("adsp", adsp_img);
+				   }
+		    }
+#endif//VENDOR_EDIT
 
 			if (IS_ERR(priv->pil_h)) {
 				dev_err(&pdev->dev, "%s: pil get failed,\n",
@@ -161,6 +203,7 @@ fail:
 
 static void adsp_loader_do(struct platform_device *pdev)
 {
+	pr_err("%s: call\n", __func__);
 	schedule_work(&adsp_ldr_work);
 }
 
@@ -211,16 +254,17 @@ static ssize_t adsp_boot_store(struct kobject *kobj,
 {
 	int boot = 0;
 
+	pr_err("%s: call\n", __func__);
 	if (sscanf(buf, "%du", &boot) != 1) {
 		pr_err("%s: failed to read boot info from string\n", __func__);
 		return -EINVAL;
 	}
 
 	if (boot == BOOT_CMD) {
-		pr_debug("%s: going to call adsp_loader_do\n", __func__);
+		pr_err("%s: going to call adsp_loader_do\n", __func__);
 		adsp_loader_do(adsp_private);
 	} else if (boot == IMAGE_UNLOAD_CMD) {
-		pr_debug("%s: going to call adsp_unloader\n", __func__);
+		pr_err("%s: going to call adsp_unloader\n", __func__);
 		adsp_loader_unload(adsp_private);
 	}
 	return count;
@@ -359,7 +403,7 @@ static int adsp_loader_probe(struct platform_device *pdev)
 					  &adsp_fuse_not_supported);
 		if (ret) {
 			dev_dbg(&pdev->dev,
-				"%s: adsp_fuse_not_supported prop not found %d\n",
+				"%s: adsp_fuse_not_supported prop not found",
 				__func__, ret);
 			goto wqueue;
 		}
@@ -393,7 +437,7 @@ static int adsp_loader_probe(struct platform_device *pdev)
 		goto wqueue;
 	}
 	if (len <= 0 || len > sizeof(u32)) {
-		dev_dbg(&pdev->dev, "%s: nvmem cell length out of range: %zu\n",
+		dev_dbg(&pdev->dev, "%s: nvmem cell length out of range: %d\n",
 			__func__, len);
 		kfree(buf);
 		goto wqueue;
@@ -456,7 +500,9 @@ static int adsp_loader_probe(struct platform_device *pdev)
 		}
 	}
 wqueue:
+	dev_err(&pdev->dev, "%s: go to wqueue\n", __func__);
 	INIT_WORK(&adsp_ldr_work, adsp_load_fw);
+	dev_err(&pdev->dev, "%s: adsp_load_fw finish\n", __func__);
 	if (adsp_fw_bit_values)
 		devm_kfree(&pdev->dev, adsp_fw_bit_values);
 	if (adsp_fw_name_array)
@@ -484,6 +530,7 @@ static struct platform_driver adsp_loader_driver = {
 
 static int __init adsp_loader_init(void)
 {
+	printk("adsp_loader_init start debug\n");
 	return platform_driver_register(&adsp_loader_driver);
 }
 module_init(adsp_loader_init);

@@ -60,6 +60,14 @@
 #define CAM_MAX_ACQ_RES    5
 #define CAM_MAX_HW_SPLIT   3
 
+#ifndef VENDOR_EDIT
+#define VENDOR_EDIT
+#endif
+
+#ifdef VENDOR_EDIT  //add dpc read for imx471
+#define CAM_GET_DPC_DATA                    (CAM_COMMON_OPCODE_BASE_v2 + 0x4)
+#endif
+
 
 /**
  * enum flush_type_t - Identifies the various flush types
@@ -95,7 +103,9 @@ struct cam_control {
 /* camera IOCTL */
 #define VIDIOC_CAM_CONTROL \
 	_IOWR('V', BASE_VIDIOC_PRIVATE, struct cam_control)
-
+/*add for AT test*/
+#define VIDIOC_CAM_FTM_POWNER_UP 0
+#define VIDIOC_CAM_FTM_POWNER_DOWN 1
 /**
  * struct cam_hw_version - Structure for HW version of camera devices
  *

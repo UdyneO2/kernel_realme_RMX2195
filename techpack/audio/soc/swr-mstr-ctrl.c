@@ -1769,10 +1769,19 @@ static void swrm_enable_slave_irq(struct swr_mstr_ctrl *swrm)
 	dev_dbg(swrm->dev, "%s: slave status: 0x%x\n", __func__, status);
 	for (i = 0; i < (swrm->master.num_dev + 1); i++) {
 		if (status & SWRM_MCP_SLV_STATUS_MASK) {
+			#ifndef OPLUS_BUG_STABILITY
 			swrm_cmd_fifo_rd_cmd(swrm, &temp, i, 0x0,
 					SWRS_SCP_INT_STATUS_CLEAR_1, 1);
 			swrm_cmd_fifo_wr_cmd(swrm, 0xFF, i, 0x0,
 					SWRS_SCP_INT_STATUS_CLEAR_1);
+			#else /* OPLUS_BUG_STABILITY */
+			if (!swrm->clk_stop_wakeup) {
+				swrm_cmd_fifo_rd_cmd(swrm, &temp, i, 0x0,
+						SWRS_SCP_INT_STATUS_CLEAR_1, 1);
+				swrm_cmd_fifo_wr_cmd(swrm, 0xFF, i, 0x0,
+						SWRS_SCP_INT_STATUS_CLEAR_1);
+			}
+			#endif /* OPLUS_BUG_STABILITY */
 			swrm_cmd_fifo_wr_cmd(swrm, 0x4, i, 0x0,
 					SWRS_SCP_INT_STATUS_MASK_1);
 		}
@@ -2171,6 +2180,7 @@ handle_irq:
 		case SWRM_INTERRUPT_STATUS_CLK_STOP_FINISHED_V2:
 			break;
 		case SWRM_INTERRUPT_STATUS_EXT_CLK_STOP_WAKEUP:
+			#ifndef OPLUS_BUG_STABILITY
 			if (swrm->state == SWR_MSTR_UP)
 				dev_dbg(swrm->dev,
 					"%s:SWR Master is already up\n",
@@ -2185,6 +2195,25 @@ handle_irq:
 			 * interrupts, if any.
 			 */
 			swrm_enable_slave_irq(swrm);
+			#else /* OPLUS_BUG_STABILITY */
+			if (swrm->state == SWR_MSTR_UP) {
+				dev_dbg(swrm->dev,
+					"%s:SWR Master is already up\n",
+					__func__);
+			} else {
+				dev_err_ratelimited(swrm->dev,
+					"%s: SWR wokeup during clock stop\n",
+					__func__);
+				/* It might be possible the slave device gets reset
+				 * reset and slave interrupt gets missed. So
+				 * re-enable Host IRQ and process slave pending
+				 * interrupts, if any.
+				 */
+				swrm->clk_stop_wakeup = true;
+				swrm_enable_slave_irq(swrm);
+				swrm->clk_stop_wakeup = false;
+			}
+			#endif /* OPLUS_BUG_STABILITY */
 			break;
 		default:
 			dev_err_ratelimited(swrm->dev,
@@ -2752,6 +2781,10 @@ static int swrm_probe(struct platform_device *pdev)
 	swrm->dev_up = true;
 	swrm->state = SWR_MSTR_UP;
 	swrm->ipc_wakeup = false;
+	#ifdef OPLUS_BUG_STABILITY
+	swrm->enable_slave_irq = false;
+	swrm->clk_stop_wakeup = false;
+	#endif /* #ifdef OPLUS_BUG_STABILITY */
 	swrm->ipc_wakeup_triggered = false;
 	swrm->disable_div2_clk_switch = FALSE;
 	init_completion(&swrm->reset);

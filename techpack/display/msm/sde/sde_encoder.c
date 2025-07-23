@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
  *
@@ -1176,11 +1176,8 @@ static int sde_encoder_virt_atomic_check(
 				CONNECTOR_PROP_QSYNC_MODE);
 
 	if (has_modeset && qsync_dirty &&
-		(msm_is_mode_seamless_poms(adj_mode) ||
-		msm_is_mode_seamless_dms(adj_mode) ||
-		msm_is_mode_seamless_dyn_clk(adj_mode))) {
-		SDE_ERROR("invalid qsync update during modeset priv flag:%x\n",
-			adj_mode->private_flags);
+		!msm_is_mode_seamless_vrr(adj_mode)) {
+		SDE_ERROR("invalid qsync during modeset\n");
 		return -EINVAL;
 	}
 
@@ -2744,6 +2741,7 @@ static int _sde_encoder_rc_early_wakeup(struct drm_encoder *drm_enc,
 	struct msm_drm_thread *disp_thread;
 	int ret = 0;
 
+#ifndef OPLUS_BUG_STABILITY
 	if (!sde_enc->crtc ||
 		sde_enc->crtc->index >= ARRAY_SIZE(priv->disp_thread)) {
 		SDE_DEBUG_ENC(sde_enc,
@@ -2755,6 +2753,22 @@ static int _sde_encoder_rc_early_wakeup(struct drm_encoder *drm_enc,
 	}
 
 	disp_thread = &priv->disp_thread[sde_enc->crtc->index];
+#else
+		{
+			struct drm_crtc *crtc = sde_enc->crtc;
+
+			if (!crtc || crtc->index >= ARRAY_SIZE(priv->disp_thread)) {
+				SDE_DEBUG_ENC(sde_enc,
+						"invalid crtc:%d or crtc index:%d , sw_event:%u\n",
+						crtc == NULL,
+						crtc ? crtc->index : -EINVAL,
+						sw_event);
+				return -EINVAL;
+			}
+
+			disp_thread = &priv->disp_thread[crtc->index];
+		}
+#endif /* OPLUS_BUG_STABILITY */
 
 	mutex_lock(&sde_enc->rc_lock);
 
@@ -3748,6 +3762,11 @@ static void sde_encoder_underrun_callback(struct drm_encoder *drm_enc,
 	trace_sde_encoder_underrun(DRMID(drm_enc),
 		atomic_read(&phy_enc->underrun_cnt));
 
+#ifdef OPLUS_BUG_STABILITY
+	/* add for add log for debug underrun issue.*/
+	SDE_ERROR("QCOM underrun debug\n");
+#endif /*OPLUS_BUG_STABILITY*/
+
 	SDE_DBG_CTRL("stop_ftrace");
 	SDE_DBG_CTRL("panic_underrun");
 
@@ -4425,6 +4444,49 @@ void sde_encoder_trigger_kickoff_pending(struct drm_encoder *drm_enc)
 	}
 	sde_enc->idle_pc_restore = false;
 }
+#ifdef OPLUS_BUG_STABILITY
+extern int oplus_dimlayer_dither_threshold;
+extern int oplus_dimlayer_dither_bitdepth;
+extern int oplus_get_panel_brightness_to_alpha(void);
+extern bool sde_crtc_get_dimlayer_mode(struct drm_crtc_state *crtc_state);
+static bool
+_sde_encoder_setup_dither_for_onscreenfingerprint(struct sde_encoder_phys *phys,
+						  void *dither_cfg, int len)
+{
+	struct drm_encoder *drm_enc = phys->parent;
+	struct drm_msm_dither dither;
+
+	if (!drm_enc || !drm_enc->crtc)
+		return -EFAULT;
+
+	if (!sde_crtc_get_dimlayer_mode(drm_enc->crtc->state))
+		return -EINVAL;
+
+	if (len != sizeof(dither))
+		return -EINVAL;
+
+	if (oplus_get_panel_brightness_to_alpha() < oplus_dimlayer_dither_threshold)
+		return -EINVAL;
+
+	memcpy(&dither, dither_cfg, len);
+#ifndef OPLUS_BUG_STABILITY
+/*
+ * modify for enable dither func
+ */
+	dither.c0_bitdepth = 8;
+#else /*OPLUS_BUG_STABILITY*/
+	dither.c0_bitdepth = 6;
+#endif /*OPLUS_BUG_STABILITY*/
+	dither.c1_bitdepth = 8;
+	dither.c2_bitdepth = 8;
+	dither.c3_bitdepth = 8;
+	dither.temporal_en = 1;
+
+	phys->hw_pp->ops.setup_dither(phys->hw_pp, &dither, len);
+
+	return 0;
+}
+#endif /* OPLUS_BUG_STABILITY */
 
 static void _sde_encoder_setup_dither(struct sde_encoder_phys *phys)
 {
@@ -4469,6 +4531,9 @@ static void _sde_encoder_setup_dither(struct sde_encoder_phys *phys)
 			}
 		}
 	} else {
+#ifdef OPLUS_BUG_STABILITY
+		if (_sde_encoder_setup_dither_for_onscreenfingerprint(phys, dither_cfg, len))
+#endif /* OPLUS_BUG_STABILITY */
 		phys->hw_pp->ops.setup_dither(phys->hw_pp, dither_cfg, len);
 	}
 }
@@ -4826,6 +4891,11 @@ void sde_encoder_needs_hw_reset(struct drm_encoder *drm_enc)
 	}
 }
 
+#ifdef OPLUS_BUG_STABILITY
+extern int sde_connector_update_backlight(struct drm_connector *conn);
+extern int sde_connector_update_hbm(struct drm_connector *connector);
+#endif /* OPLUS_BUG_STABILITY */
+
 int sde_encoder_prepare_for_kickoff(struct drm_encoder *drm_enc,
 		struct sde_encoder_kickoff_params *params)
 {
@@ -4851,6 +4921,13 @@ int sde_encoder_prepare_for_kickoff(struct drm_encoder *drm_enc,
 
 	SDE_DEBUG_ENC(sde_enc, "\n");
 	SDE_EVT32(DRMID(drm_enc));
+
+#ifdef OPLUS_BUG_STABILITY
+	if (sde_enc->cur_master) {
+		sde_connector_update_backlight(sde_enc->cur_master->connector);
+		sde_connector_update_hbm(sde_enc->cur_master->connector);
+	}
+#endif /* OPLUS_BUG_STABILITY */
 
 	is_cmd_mode = sde_encoder_check_curr_mode(drm_enc,
 				MSM_DISPLAY_CMD_MODE);

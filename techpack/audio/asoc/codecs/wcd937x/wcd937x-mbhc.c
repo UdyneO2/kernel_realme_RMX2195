@@ -20,7 +20,11 @@
 #include <asoc/wcd-mbhc-v2-api.h>
 #include "internal.h"
 
+#ifdef OPLUS_ARCH_EXTENDS
+#define WCD937X_ZDET_SUPPORTED          false
+#else
 #define WCD937X_ZDET_SUPPORTED          true
+#endif
 /* Z value defined in milliohm */
 #define WCD937X_ZDET_VAL_32             32000
 #define WCD937X_ZDET_VAL_400            400000
@@ -719,10 +723,12 @@ static void wcd937x_mbhc_hph_pull_down_ctrl(struct snd_soc_component *component,
 		snd_soc_component_update_bits(component, WCD937X_HPH_PA_CTL2,
 				    0x10, 0x10);
 	} else {
+		#ifndef OPLUS_ARCH_EXTENDS
 		snd_soc_component_update_bits(component, WCD937X_HPH_PA_CTL2,
 				    0x40, 0x00);
 		snd_soc_component_update_bits(component, WCD937X_HPH_PA_CTL2,
 				    0x10, 0x00);
+		#endif /* OPLUS_ARCH_EXTENDS */
 	}
 }
 

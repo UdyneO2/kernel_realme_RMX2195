@@ -39,6 +39,18 @@
 #include <dt-bindings/sound/audio-codec-port-types.h>
 #include "bengal-port-config.h"
 
+#ifdef OPLUS_FEATURE_AUDIO_FTM
+#include "dailink_extends.h"
+#endif /* OPLUS_FEATURE_AUDIO_FTM */
+
+#ifndef OPLUS_ARCH_EXTENDS
+#define OPLUS_ARCH_EXTENDS
+#endif
+
+#ifdef OPLUS_ARCH_EXTENDS
+#include "../../../../oplus/kernel_4.19/audio/codecs/sia81xx/sia81xx_aux_dev_if.h"
+#endif /* OPLUS_ARCH_EXTENDS */
+
 #define DRV_NAME "bengal-asoc-snd"
 #define __CHIPSET__ "BENGAL "
 #define MSM_DAILINK_NAME(name) (__CHIPSET__#name)
@@ -63,7 +75,11 @@
 #define CODEC_EXT_CLK_RATE          9600000
 #define ADSP_STATE_READY_TIMEOUT_MS 3000
 #define DEV_NAME_STR_LEN            32
+#ifndef OPLUS_ARCH_EXTENDS
 #define WCD_MBHC_HS_V_MAX           1600
+#else /* OPLUS_ARCH_EXTENDS */
+#define WCD_MBHC_HS_V_MAX           1700
+#endif /* OPLUS_ARCH_EXTENDS */
 #define ROULEUR_MBHC_HS_V_MAX       1700
 
 #define TDM_CHANNEL_MAX		8
@@ -566,7 +582,11 @@ static void *def_rouleur_mbhc_cal(void);
 static struct wcd_mbhc_config wcd_mbhc_cfg = {
 	.read_fw_bin = false,
 	.calibration = NULL,
+	#ifdef OPLUS_ARCH_EXTENDS
+	.detect_extn_cable = false,
+	#else /* OPLUS_ARCH_EXTENDS */
 	.detect_extn_cable = true,
+	#endif /* OPLUS_ARCH_EXTENDS */
 	.mono_stero_detection = false,
 	.swap_gnd_mic = NULL,
 	.hs_ext_micbias = true,
@@ -583,7 +603,11 @@ static struct wcd_mbhc_config wcd_mbhc_cfg = {
 	.mbhc_micbias = MIC_BIAS_2,
 	.anc_micbias = MIC_BIAS_2,
 	.enable_anc_mic_detect = false,
+	#ifndef OPLUS_ARCH_EXTENDS
 	.moisture_duty_cycle_en = true,
+	#else /*OPLUS_ARCH_EXTENDS*/
+	.moisture_duty_cycle_en = false,
+	#endif /*OPLUS_ARCH_EXTENDS*/
 };
 
 static inline int param_is_mask(int p)
@@ -2878,6 +2902,186 @@ static int msm_bt_sample_rate_tx_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+//#ifdef OPLUS_ARCH_EXTENDS
+
+//add for Awinic pa 873xx
+extern unsigned char aw87xxx_show_current_mode(int32_t channel);
+extern int aw87xxx_audio_scene_load(uint8_t mode, int32_t channel);
+static const char *const mode_function[] = {
+	"Off", "Music", "Voice", "Fm", "Rcv"
+};
+
+enum {
+	AW87XXX_LEFT_CHANNEL = 0,
+	AW87XXX_RIGHT_CHANNEL = 1,
+};
+
+static int aw87xxx_mode_get_0(struct snd_kcontrol *kcontrol, struct 	snd_ctl_elem_value *ucontrol)
+{
+	unsigned char current_mode;
+	current_mode = aw87xxx_show_current_mode(AW87XXX_LEFT_CHANNEL);
+	ucontrol->value.integer.value[0] = current_mode;
+	pr_info("%s: get mode:%d\n", __func__, current_mode);
+	return 0;
+}
+
+static int aw87xxx_mode_set_0(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	int ret = 0;
+	unsigned char set_mode;
+
+	set_mode = ucontrol->value.integer.value[0];
+
+	ret = aw87xxx_audio_scene_load(set_mode, AW87XXX_LEFT_CHANNEL);
+	if (ret < 0) {
+		pr_err("%s: mode:%d set failed\n", __func__, set_mode);
+		return -EPERM;
+	}
+	pr_info("%s: set mode:%d success", __func__, set_mode);
+	return 0;
+}
+
+static int aw87xxx_mode_get_1(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	unsigned char current_mode;
+
+	current_mode = aw87xxx_show_current_mode(AW87XXX_RIGHT_CHANNEL);
+
+	ucontrol->value.integer.value[0] = current_mode;
+	pr_info("%s: get mode:%d\n", __func__, current_mode);
+
+	return 0;
+}
+
+static int aw87xxx_mode_set_1(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	int ret = 0;
+	unsigned char set_mode;
+
+	set_mode = ucontrol->value.integer.value[0];
+
+	ret = aw87xxx_audio_scene_load(set_mode, AW87XXX_RIGHT_CHANNEL);
+	if (ret < 0) {
+		pr_err("%s: mode:%d set failed\n", __func__, set_mode);
+		return -EPERM;
+	}
+	pr_info("%s: set mode:%d success", __func__, set_mode);
+
+	return 0;
+}
+
+#ifdef OPLUS_AUDIO_PA_BOOST_VOLTAGE
+static const char *const ext_top_speaker_voltage_function[] = { "70", "75", "80" };
+static const char *const ext_bottom_speaker_voltage_function[] = { "70", "75", "80" };
+#endif /* OPLUS_AUDIO_PA_BOOST_VOLTAGE */
+
+static const struct soc_enum msm_snd_enum[] = {
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(mode_function), mode_function),
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(mode_function), mode_function),
+
+	#ifdef OPLUS_AUDIO_PA_BOOST_VOLTAGE
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(ext_top_speaker_voltage_function),
+				ext_top_speaker_voltage_function),
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(ext_bottom_speaker_voltage_function),
+				ext_bottom_speaker_voltage_function),
+	#endif /* OPLUS_AUDIO_PA_BOOST_VOLTAGE */
+};
+
+
+#ifdef OPLUS_AUDIO_PA_BOOST_VOLTAGE
+#define AW87XXX_RCV_VOLTAGE_DEFAULT (80)
+#define AW87XXX_SPK_VOLTAGE_DEFAULT (80)
+static int aw87xxx_rcv_voltage = 80;
+static int aw87xxx_spk_voltage = 80;
+//extern int (*awinic_set_rcv_voltage_pf) (int val);
+//extern int (*awinic_set_spk_voltage_pf) (int val);
+extern int aw87xxx_set_spk_voltage(int level);
+
+static int ext_top_speaker_voltage_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = aw87xxx_rcv_voltage;
+
+	return 0;
+}
+
+static int ext_top_speaker_voltage_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	if (ucontrol->value.integer.value[0] == aw87xxx_rcv_voltage){
+		return 1;
+	}
+
+	if (ucontrol->value.integer.value[0] > 0) {
+		aw87xxx_rcv_voltage = ucontrol->value.integer.value[0];
+	} else {
+		aw87xxx_rcv_voltage = AW87XXX_RCV_VOLTAGE_DEFAULT;
+	}
+
+	/*
+	if(awinic_set_rcv_voltage_pf != NULL)
+		{
+			awinic_set_rcv_voltage_pf(ucontrol->value.integer.value[0]);
+		}
+	*/
+	return 0;
+}
+
+static int ext_bottom_speaker_voltage_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	// Refer to ext_bottom_speaker_voltage_function
+	switch (aw87xxx_spk_voltage) {
+		case 70:
+			ucontrol->value.integer.value[0] = 0;
+			break;
+		case 75:
+			ucontrol->value.integer.value[0] = 1;
+			break;
+		default:
+			ucontrol->value.integer.value[0] = 2;
+			break;
+	}
+
+	return 0;
+}
+
+static int ext_bottom_speaker_voltage_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	if (ucontrol->value.integer.value[0] == aw87xxx_spk_voltage){
+		return 1;
+	}
+
+	if (ucontrol->value.integer.value[0] > 0) {
+		aw87xxx_spk_voltage = ucontrol->value.integer.value[0];
+	} else {
+		aw87xxx_spk_voltage = AW87XXX_SPK_VOLTAGE_DEFAULT;
+	}
+
+	aw87xxx_set_spk_voltage(aw87xxx_spk_voltage);
+
+	return 0;
+}
+#endif /* OPLUS_AUDIO_PA_BOOST_VOLTAGE */
+
+static const struct snd_kcontrol_new aw87xxx_snd_controls[] = {
+	SOC_ENUM_EXT("aw87xxx_mode_switch_0", msm_snd_enum[0],
+			aw87xxx_mode_get_0, aw87xxx_mode_set_0),
+	SOC_ENUM_EXT("aw87xxx_mode_switch_1", msm_snd_enum[0],
+			aw87xxx_mode_get_1, aw87xxx_mode_set_1),
+	#ifdef OPLUS_AUDIO_PA_BOOST_VOLTAGE
+	SOC_ENUM_EXT("Ext_TOP_Speaker_Voltage", msm_snd_enum[2],
+			ext_top_speaker_voltage_get, ext_top_speaker_voltage_put),
+	SOC_ENUM_EXT("Ext_BOTTOM_Speaker_Voltage", msm_snd_enum[3],
+			ext_bottom_speaker_voltage_get, ext_bottom_speaker_voltage_put),
+	#endif /* OPLUS_AUDIO_PA_BOOST_VOLTAGE */
+};
+//#endif /* OPLUS_ARCH_EXTENDS */
+
 static const struct snd_kcontrol_new msm_int_snd_controls[] = {
 	SOC_ENUM_EXT("RX_CDC_DMA_RX_0 Channels", rx_cdc_dma_rx_0_chs,
 			cdc_dma_rx_ch_get, cdc_dma_rx_ch_put),
@@ -4300,6 +4504,16 @@ static int msm_int_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	msm_add_mi2s_snd_controls(component);
 	msm_add_auxpcm_snd_controls(component);
 
+//#ifdef OPLUS_ARCH_EXTENDS
+	ret = snd_soc_add_component_controls(component, aw87xxx_snd_controls,
+				ARRAY_SIZE(aw87xxx_snd_controls));
+	if (ret < 0) {
+		pr_err("%s: add aw87xxx snd controls failed: %d\n",
+			__func__, ret);
+		return ret;
+	}
+//#endif /* OPLUS_ARCH_EXTENDS */
+
 	snd_soc_dapm_new_controls(dapm, msm_int_dapm_widgets,
 				ARRAY_SIZE(msm_int_dapm_widgets));
 
@@ -4384,6 +4598,7 @@ static void *def_wcd_mbhc_cal(void)
 	btn_high = ((void *)&btn_cfg->_v_btn_low) +
 		(sizeof(btn_cfg->_v_btn_low[0]) * btn_cfg->num_btn);
 
+	#ifndef OPLUS_ARCH_EXTENDS
 	btn_high[0] = 75;
 	btn_high[1] = 150;
 	btn_high[2] = 237;
@@ -4392,6 +4607,16 @@ static void *def_wcd_mbhc_cal(void)
 	btn_high[5] = 500;
 	btn_high[6] = 500;
 	btn_high[7] = 500;
+	#else /* OPLUS_ARCH_EXTENDS */
+	btn_high[0] = 130;		/* Hook ,0 ~ 160 Ohm*/
+	btn_high[1] = 131;
+	btn_high[2] = 253;		/* Volume + ,160 ~ 360 Ohm*/
+	btn_high[3] = 425;		/* Volume - ,360 ~ 680 Ohm*/
+	btn_high[4] = 426;
+	btn_high[5] = 426;
+	btn_high[6] = 426;
+	btn_high[7] = 426;
+	#endif /* OPLUS_ARCH_EXTENDS */
 
 	return wcd_mbhc_cal;
 }
@@ -4934,6 +5159,9 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 		.cpu_dai_name = "TX3_CDC_DMA_HOSTLESS",
 		.platform_name = "msm-pcm-hostless",
 		.dynamic = 1,
+		#ifdef OPLUS_FEATURE_AUDIO_FTM
+		.dpcm_playback = 1,
+		#endif /* OPLUS_FEATURE_AUDIO_FTM */
 		.dpcm_capture = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
 			    SND_SOC_DPCM_TRIGGER_POST},
@@ -5053,6 +5281,9 @@ static struct snd_soc_dai_link msm_common_misc_fe_dai_links[] = {
 		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
 		.ops = &msm_cdc_dma_be_ops,
 	},
+	#ifdef OPLUS_FEATURE_AUDIO_FTM
+	TX_CDC_DMA_HOSTLESS_DAILINK("TX4_CDC_DMA Hostless", "TX4_CDC_DMA Hostless", "TX4_CDC_DMA_HOSTLESS"),
+	#endif /* OPLUS_FEATURE_AUDIO_FTM */
 };
 
 static struct snd_soc_dai_link msm_common_be_dai_links[] = {
@@ -5979,6 +6210,7 @@ static const struct of_device_id bengal_asoc_machine_of_match[]  = {
 	{},
 };
 
+#ifndef OPLUS_BUG_COMPATIBILITY
 static int msm_snd_card_bengal_late_probe(struct snd_soc_card *card)
 {
 	struct snd_soc_component *component;
@@ -6035,6 +6267,8 @@ err_hs_detect:
 err_mbhc_cal:
 	return ret;
 }
+#endif /* OPLUS_BUG_COMPATIBILITY */
+
 static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 {
 	struct snd_soc_card *card = NULL;
@@ -6193,7 +6427,9 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 	if (card) {
 		card->dai_link = dailink;
 		card->num_links = total_links;
+		#ifndef OPLUS_BUG_COMPATIBILITY
 		card->late_probe = msm_snd_card_bengal_late_probe;
+		#endif /* OPLUS_BUG_COMPATIBILITY */
 	}
 
 	return card;
@@ -6204,6 +6440,10 @@ static int msm_aux_codec_init(struct snd_soc_component *component)
 	struct snd_soc_dapm_context *dapm =
 				snd_soc_component_get_dapm(component);
 	int ret = 0;
+	#ifdef OPLUS_BUG_COMPATIBILITY
+	void *mbhc_calibration;
+	#endif /* OPLUS_BUG_COMPATIBILITY */
+
 	struct snd_info_entry *entry;
 	struct snd_card *card = component->card->snd_card;
 	struct msm_asoc_mach_data *pdata;
@@ -6230,7 +6470,11 @@ static int msm_aux_codec_init(struct snd_soc_component *component)
 			dev_dbg(component->dev, "%s: Cannot create codecs module entry\n",
 				 __func__);
 			ret = 0;
+			#ifdef OPLUS_BUG_COMPATIBILITY
+			goto mbhc_cfg_cal;
+			#else /* OPLUS_BUG_COMPATIBILITY */
 			goto err;
+			#endif /* OPLUS_BUG_COMPATIBILITY */
 		}
 		pdata->codec_root = entry;
 	}
@@ -6264,7 +6508,37 @@ static int msm_aux_codec_init(struct snd_soc_component *component)
 			}
 		}
 	}
+
+	#ifdef OPLUS_BUG_COMPATIBILITY
+mbhc_cfg_cal:
+	if (data != NULL) {
+		if (!strncmp(data, "wcd937x", sizeof("wcd937x"))) {
+			mbhc_calibration = def_wcd_mbhc_cal();
+			if (!mbhc_calibration)
+				return -ENOMEM;
+			wcd_mbhc_cfg.calibration = mbhc_calibration;
+			ret = wcd937x_mbhc_hs_detect(component, &wcd_mbhc_cfg);
+		} else if (!strncmp( data, "rouleur", sizeof("rouleur"))) {
+			mbhc_calibration = def_rouleur_mbhc_cal();
+			if (!mbhc_calibration)
+				return -ENOMEM;
+			wcd_mbhc_cfg.calibration = mbhc_calibration;
+			ret = rouleur_mbhc_hs_detect(component, &wcd_mbhc_cfg);
+		}
+	}
+
+	if (ret) {
+		dev_err(component->dev, "%s: mbhc hs detect failed, err:%d\n",
+			__func__, ret);
+		goto err_hs_detect;
+	}
+	return 0;
+
+err_hs_detect:
+	kfree(mbhc_calibration);
+	#else /* OPLUS_BUG_COMPATIBILITY */
 err:
+	#endif /* OPLUS_BUG_COMPATIBILITY */
 	return ret;
 }
 
@@ -6285,6 +6559,10 @@ static int msm_init_aux_dev(struct platform_device *pdev,
 	int found = 0;
 	int codecs_found = 0;
 	int ret = 0;
+#ifdef OPLUS_ARCH_EXTENDS
+	int sia81xx_aux_num = 0;
+	int sia81xx_codec_conf_num = 0;
+#endif /* OPLUS_ARCH_EXTENDS */
 
 	/* Get maximum WSA device count for this platform */
 	ret = of_property_read_u32(pdev->dev.of_node,
@@ -6490,6 +6768,13 @@ aux_dev_register:
 	card->num_aux_devs = wsa_max_devs + codec_aux_dev_cnt;
 	card->num_configs = wsa_max_devs + codec_aux_dev_cnt;
 
+#ifdef OPLUS_ARCH_EXTENDS
+	sia81xx_aux_num = soc_sia81xx_get_aux_num(pdev);
+	sia81xx_codec_conf_num = soc_sia81xx_get_codec_conf_num(pdev);
+	card->num_aux_devs += sia81xx_aux_num;
+	card->num_configs += sia81xx_codec_conf_num;
+#endif /* OPLUS_ARCH_EXTENDS */
+
 	/* Alloc array of AUX devs struct */
 	msm_aux_dev = devm_kcalloc(&pdev->dev, card->num_aux_devs,
 				       sizeof(struct snd_soc_aux_dev),
@@ -6539,6 +6824,11 @@ aux_dev_register:
 		msm_codec_conf[i].of_node =
 				wsa881x_dev_info[i].of_node;
 	}
+
+#ifdef OPLUS_ARCH_EXTENDS
+	soc_sia81xx_init(pdev, msm_aux_dev + 1, sia81xx_aux_num,
+				msm_codec_conf + 1, sia81xx_codec_conf_num);
+#endif /* OPLUS_ARCH_EXTENDS */
 
 	for (i = 0; i < codec_aux_dev_cnt; i++) {
 		msm_aux_dev[wsa_max_devs + i].name = NULL;
@@ -6857,6 +7147,10 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 	memcpy(&adsp_var_idx, buf, len);
 	kfree(buf);
 	pdata->va_disable = adsp_var_idx;
+
+//#ifdef OPLUS_BUG_DEBUG
+	pr_warning("%s, %d, soundcard registered successfully!\n", __func__, __LINE__);
+//#endif /* OPLUS_BUG_DEBUG */
 
 ret:
 	return 0;

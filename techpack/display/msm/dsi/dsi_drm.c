@@ -436,6 +436,20 @@ static bool dsi_bridge_mode_fixup(struct drm_bridge *bridge,
 				dsi_mode.panel_mode);
 		}
 	}
+#ifdef OPLUS_BUG_STABILITY
+	if (display->is_cont_splash_enabled)
+		dsi_mode.dsi_mode_flags &= ~DSI_MODE_FLAG_DMS;
+
+	if (display->panel && display->panel->oplus_priv.is_aod_ramless) {
+		if (crtc_state->active_changed && (dsi_mode.dsi_mode_flags & DSI_MODE_FLAG_DYN_CLK)) {
+			DSI_ERR("dyn clk changed when active_changed, WA to skip dyn clk change\n");
+			dsi_mode.dsi_mode_flags &= ~DSI_MODE_FLAG_DYN_CLK;
+		}
+
+		if (dsi_mode.dsi_mode_flags & DSI_MODE_FLAG_DMS)
+			dsi_mode.dsi_mode_flags |= DSI_MODE_FLAG_SEAMLESS;
+	}
+	#endif /* OPLUS_BUG_STABILITY */
 
 	/* Reject seamless transition when active changed */
 	if (crtc_state->active_changed &&

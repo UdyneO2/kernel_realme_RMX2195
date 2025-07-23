@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  */
 
 
@@ -1009,10 +1009,16 @@ static int msm_pcm_capture_copy(struct snd_pcm_substream *substream,
 		pr_debug("Offset value = %d\n", offset);
 		if (size == 0 || size < prtd->pcm_count) {
 			memset(bufptr + offset + size, 0, prtd->pcm_count - size);
-			if (fbytes > prtd->pcm_count)
+			#ifndef OPLUS_BUG_STABILITY
+			size = xfer = prtd->pcm_count;
+			#else /* OPLUS_BUG_STABILITY */
+			if (fbytes > prtd->pcm_count) {
 				size = xfer = prtd->pcm_count;
-			else
+			}
+			else {
 				size = xfer = fbytes;
+			}
+			#endif /* OPLUS_BUG_STABILITY */
 		}
 
 		if (copy_to_user(buf, bufptr+offset, xfer)) {
